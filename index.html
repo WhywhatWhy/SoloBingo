@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+
+<title>솔로빙고</title>
+
+<style>
+body {
+  font-family: 'Noto Sans KR', sans-serif;
+  background: #f5f6f8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+#board {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 4px;
+  width: 95vw;
+  max-width: 600px;
+}
+
+.cell {
+  background: white;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+  font-weight: 500;
+  transition: transform 0.08s ease, background 0.2s;
+}
+
+.cell:active {
+  transform: scale(0.92);
+}
+
+.cell.selected {
+  background: orange;
+  color: white;
+  transform: scale(1.05);
+}
+
+.cell.filled {
+  animation: pop 0.15s ease;
+}
+
+@keyframes pop {
+  0% { transform: scale(0.8); }
+  70% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+button {
+  margin-top: 12px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: none;
+  background: #333;
+  color: white;
+}
+</style>
+</head>
+
+<body>
+
+<h2>솔로빙고</h2>
+<div id="board"></div>
+<p>
+<button onclick="generateBoard()">다시 생성</button>
+
+<script>
+const rows = 18;
+const cols = 12;
+const boardEl = document.getElementById("board");
+
+let board = [];
+let colored = new Set();
+let selected = null;
+let baseHue = 0;
+
+// ===== 유틸 =====
+function index(r,c){ return r*cols+c; }
+function coords(i){ return [Math.floor(i/cols), i%cols]; }
+
+function shuffle(arr){
+  for(let i=arr.length-1;i>0;i--){
+    let j=Math.floor(Math.random()*(i+1));
+    [arr[i],arr[j]]=[arr[j],arr[i]];
+  }
+}
+
+// ===== 보드 생성 =====
+function generateBoard(){
+  boardEl.innerHTML="";
+  colored.clear();
+  selected=null;
+
+  baseHue = Math.random()*360;
+
+  let nums=[];
+  for(let i=0;i<6;i++){
+    for(let n=1;n<=36;n++) nums.push(n);
+  }
+  shuffle(nums);
+  board=nums;
+
+  drawBoard();
+}
+
+// ===== 덩어리 =====
+function getClusters(){
+  let visited=new Set();
+  let clusters=[];
+
+  colored.forEach(start=>{
+    if(visited.has(start)) return;
+
+    let cluster=new Set();
+    let stack=[start];
+
+    while(stack.length){
+      let cur=stack.pop();
+      if(visited.has(cur)) continue;
+
+      visited.add(cur);
+      cluster.add(cur);
+
+      let [r,c]=coords(cur);
+
+      [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dr,dc])=>{
+        let nr=r+dr,nc=c+dc;
+        if(nr<0||nc<0||nr>=rows||nc>=cols) return;
+
+        let ni=index(nr,nc);
+        if(colored.has(ni) && !visited.has(ni)){
+          stack.push(ni);
+        }
+      });
+    }
+
+    clusters.push(cluster);
+  });
+
+  return clusters;
+}
+
+// ===== 덩어리 접촉 =====
+function getTouchingClusters(i){
+  const [r,c] = coords(i);
+  const clusters = getClusters();
+
+  let touching=[];
+
+  clusters.forEach(cl=>{
+    for(let idx of cl){
+      let [cr,cc]=coords(idx);
+      if(Math.abs(cr-r)+Math.abs(cc-c)===1){
+        touching.push(cl);
+        break;
+      }
+    }
+  });
+
+  return touching;
+}
+
+// ===== 같은 덩어리 접촉 여부 =====
+function isTouchingSameCluster(i1, i2){
+  const clusters = getClusters();
+
+  for(let cl of clusters){
+    let touching1 = false;
+    let touching2 = false;
+
+    for(let idx of cl){
+      let [r,c] = coords(idx);
+
+      let [r1,c1] = coords(i1);
+      let [r2,c2] = coords(i2);
+
+      if(Math.abs(r-r1)+Math.abs(c-c1)===1){
+        touching1 = true;
+      }
+
+      if(Math.abs(r-r2)+Math.abs(c-c2)===1){
+        touching2 = true;
+      }
+    }
+
+    // 🔥 같은 덩어리에 둘 다 붙어있으면 true
+    if(touching1 && touching2){
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// ===== 인접 같은 숫자 =====
+function isAdjacentSame(i1,i2){
+  const [r1,c1]=coords(i1);
+  const [r2,c2]=coords(i2);
+
+  return (Math.abs(r1-r2)+Math.abs(c1-c2)===1)
+         && board[i1]===board[i2];
+}
+
+// ===== 선택 가능 =====
+function canPaint(i){
+  return !colored.has(i);
+}
+
+// ===== 클릭 =====
+function clickCell(e){
+  let i=parseInt(e.target.dataset.idx);
+  if(!canPaint(i)) return;
+
+  if(selected===null){
+    selected=i;
+    e.target.classList.add("selected");
+  }
+  else if(selected===i){
+    e.target.classList.remove("selected");
+    selected=null;
+  }
+  else{
+    if(board[selected]===board[i]){
+
+      let sameCluster = isTouchingSameCluster(selected, i);
+      let adjacentSame = isAdjacentSame(selected, i);
+
+      let [r1,c1]=coords(selected);
+      let [r2,c2]=coords(i);
+
+      let bothEdge =
+        (r1===0 || c1===0 || r1===rows-1 || c1===cols-1) &&
+        (r2===0 || c2===0 || r2===rows-1 || c2===cols-1);
+
+      // 🔥 최종 조건
+      if(!(sameCluster || adjacentSame || bothEdge)){
+        document.querySelector(`[data-idx="${selected}"]`).classList.remove("selected");
+        selected=null;
+        return;
+      }
+
+      let c1El=document.querySelector(`[data-idx="${selected}"]`);
+      let c2El=e.target;
+
+      c1El.classList.remove("selected");
+      c2El.classList.remove("selected");
+
+      let lightness = 60 + Math.random()*15;
+      let color = `hsl(${baseHue}, 35%, ${lightness}%)`;
+
+      c1El.style.background=color;
+      c2El.style.background=color;
+      c1El.style.color="white";
+      c2El.style.color="white";
+
+      c1El.classList.add("filled");
+      c2El.classList.add("filled");
+
+      colored.add(selected);
+      colored.add(i);
+      selected=null;
+
+      if(colored.size===rows*cols){
+        setTimeout(()=>alert("🎉 클리어!"),50);
+      }
+
+    } else {
+      document.querySelector(`[data-idx="${selected}"]`).classList.remove("selected");
+      selected=null;
+    }
+  }
+}
+
+// ===== 그리기 =====
+function drawBoard(){
+  for(let i=0;i<rows*cols;i++){
+    let cell=document.createElement("div");
+    cell.className="cell";
+    cell.textContent=board[i];
+    cell.dataset.idx=i;
+    cell.onclick=clickCell;
+    boardEl.appendChild(cell);
+  }
+}
+
+// 시작
+generateBoard();
+</script>
+
+</body>
+</html>
