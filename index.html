@@ -128,6 +128,14 @@ button {
 <button onclick="randomPaint()">랜덤 색칠</button>
   
 <script>
+  // ===== 효과음 =====
+const paintSound = new Audio("bubble-pop-06.mp3");
+
+function playPaintSound(){
+  paintSound.currentTime = 0;
+  paintSound.play().catch(()=>{});
+}
+  
 const rows = 18;
 const cols = 12;
 const boardEl = document.getElementById("board");
@@ -322,6 +330,8 @@ function clickCell(e){
 
       c1El.classList.add("filled");
       c2El.classList.add("filled");
+
+      playPaintSound();
 
       colored.add(selected);
       colored.add(i);
